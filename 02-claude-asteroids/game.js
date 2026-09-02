@@ -291,21 +291,76 @@ class PowerUp {
   }
 }
 
+// ── Ítem: Bomba Nova ──────────────────────────────────────────────────────────
+// Aparece cada NOVA_KILLS_NEEDED asteroides destruidos por bala. Al tocarla la
+// nave detona al instante y elimina todos los asteroides en pantalla (sin puntos).
+const NOVA_KILLS_NEEDED = 3;
+
+class NovaBomb {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    const angle = rand(0, Math.PI * 2);
+    const speed = rand(15, 40);
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this.radius = 10;
+    this.ttl  = 8;   // desaparece si no se recoge
+    this.dead = false;
+  }
+
+  update(dt) {
+    this.x = wrap(this.x + this.vx * dt, W);
+    this.y = wrap(this.y + this.vy * dt, H);
+    this.ttl -= dt;
+    if (this.ttl <= 0) this.dead = true;
+  }
+
+  draw() {
+    // Parpadea los últimos 2 segundos
+    if (this.ttl < 2 && Math.floor(this.ttl * 6) % 2 === 0) return;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.strokeStyle = '#ff2a2a';
+    ctx.fillStyle   = '#ff2a2a';
+    ctx.lineWidth   = 1.5;
+    // Anillo exterior
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    // Núcleo relleno
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Cuatro rayos de la nova
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      ctx.moveTo(Math.cos(a) * 5, Math.sin(a) * 5);
+      ctx.lineTo(Math.cos(a) * 8, Math.sin(a) * 8);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 // ── Estado del juego ──────────────────────────────────────────────────────────
-let ship, bullets, asteroids, particles, powerups;
+let ship, bullets, asteroids, particles, powerups, bombs;
 let powerupSpawned; // true cuando el power-up ya apareció en este nivel
+let killCount;      // asteroides destruidos por bala desde la última bomba
 let score, lives, level;
 let state;      // 'playing' | 'dead' | 'gameover'
 let deadTimer;
 
-function spawnAsteroids(count) {
+// Genera asteroides grandes lejos de (cx, cy); por defecto el centro, donde reaparece la nave
+function spawnAsteroids(count, cx = W / 2, cy = H / 2) {
   const SAFE_DIST = 130;
   for (let i = 0; i < count; i++) {
     let x, y;
     do {
       x = rand(0, W);
       y = rand(0, H);
-    } while (Math.hypot(x - W / 2, y - H / 2) < SAFE_DIST);
+    } while (Math.hypot(x - cx, y - cy) < SAFE_DIST);
     asteroids.push(new Asteroid(x, y, 3));
   }
 }
@@ -316,7 +371,9 @@ function initGame() {
   asteroids = [];
   particles = [];
   powerups  = [];
+  bombs     = [];
   powerupSpawned = false;
+  killCount = 0;
   score  = 0;
   lives  = 3;
   level  = 1;
@@ -324,8 +381,18 @@ function initGame() {
   spawnAsteroids(4);
 }
 
-function nextLevel() {
+// keepShip: true cuando el nivel lo limpió la Bomba Nova. La nave conserva su
+// posición y estado, y las partículas de la explosión siguen visibles.
+function nextLevel(keepShip = false) {
   level++;
+  bombs     = [];
+  killCount = 0;
+  if (keepShip) {
+    // Balas, partículas y power-up flotante se conservan; solo llegan asteroides nuevos
+    powerupSpawned = powerups.length > 0;
+    spawnAsteroids(3 + level, ship.x, ship.y);
+    return;
+  }
   bullets   = [];
   particles = [];
   powerups  = [];
@@ -338,6 +405,12 @@ function nextLevel() {
 
 function explode(x, y, count = 8) {
   for (let i = 0; i < count; i++) particles.push(new Particle(x, y));
+}
+
+// Bomba Nova: elimina todos los asteroides visibles. Sin puntos, sin fragmentos.
+function detonateNova() {
+  for (const a of asteroids) explode(a.x, a.y, a.size * 5);
+  asteroids = [];
 }
 
 function killShip() {
@@ -368,6 +441,8 @@ function update(dt) {
     asteroids.forEach(a => a.update(dt));
     powerups.forEach(p => p.update(dt));
     powerups = powerups.filter(p => !p.dead);
+    bombs.forEach(b => b.update(dt));
+    bombs = bombs.filter(b => !b.dead);
     if (deadTimer <= 0) { state = 'playing'; ship.reset(); }
     return;
   }
@@ -382,10 +457,12 @@ function update(dt) {
   asteroids.forEach(a => a.update(dt));
   particles.forEach(p => p.update(dt));
   powerups.forEach(p => p.update(dt));
+  bombs.forEach(b => b.update(dt));
 
   bullets   = bullets.filter(b => !b.dead);
   particles = particles.filter(p => !p.dead);
   powerups  = powerups.filter(p => !p.dead);
+  bombs     = bombs.filter(b => !b.dead);
 
   // Bala vs asteroide
   const newAsteroids = [];
@@ -397,6 +474,13 @@ function update(dt) {
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
+        // Bomba Nova: cada NOVA_KILLS_NEEDED asteroides destruidos por bala
+        killCount++;
+        if (killCount >= NOVA_KILLS_NEEDED) {
+          killCount = 0;
+          // Solo una bomba a la vez: la nueva reemplaza a la que estuviera flotando
+          bombs = [new NovaBomb(a.x, a.y)];
+        }
         // Power-up: uno por nivel, garantizado a más tardar en el último asteroide
         if (!powerupSpawned) {
           const isLast = a.size === 1
@@ -422,6 +506,18 @@ function update(dt) {
   }
   powerups = powerups.filter(p => !p.dead);
 
+  // Nave vs bomba: detona al contacto (antes de la colisión nave-asteroide)
+  let novaCleared = false;
+  for (const b of bombs) {
+    if (dist(ship, b) < ship.radius + b.radius) {
+      b.dead = true;
+      detonateNova();
+      novaCleared = true;
+      break;
+    }
+  }
+  bombs = bombs.filter(b => !b.dead);
+
   // Nave vs asteroide
   if (ship.invincible <= 0) {
     for (const a of asteroids) {
@@ -433,7 +529,8 @@ function update(dt) {
   }
 
   // Nivel completado (espera a que el power-up se recoja o expire)
-  if (asteroids.length === 0 && powerups.length === 0) nextLevel();
+  // Si lo limpió la bomba, avanza sin reiniciar la nave ni borrar la explosión
+  if (asteroids.length === 0 && (novaCleared || powerups.length === 0)) nextLevel(novaCleared);
 }
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
@@ -502,6 +599,7 @@ function draw() {
 
   particles.forEach(p => p.draw());
   powerups.forEach(p => p.draw());
+  bombs.forEach(b => b.draw());
   asteroids.forEach(a => a.draw());
   bullets.forEach(b => b.draw());
   ship.draw();

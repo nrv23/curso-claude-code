@@ -13,4 +13,5 @@ Puedo copiar y pegar imagenes en claude cli e indicarle que hacer con esa iamgen
 
 en el claude cli puedo indicar que archivo revisa usando @ con ese caracter se cargan los archivos del proyecto
 
-siempre usar plan mode para que claude analice bien un prompt y muestre el plan de accion antes de ejeuctarlo
+siempre usar plan mode para que claude analice bien un prompt y muestre el plan de accion antes de ejeuctarlo en cambios que sean sensibles o grandes en 
+el codigo.
