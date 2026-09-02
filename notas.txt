@@ -10,3 +10,5 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBnzKL2cMYX9O+i7bYrGWH4Hpsqo7CcpjqURFlK60Znd
 /clear limpia el conte
 
 Puedo copiar y pegar imagenes en claude cli e indicarle que hacer con esa iamgen o recurso
+
+en el claude cli puedo indicar que archivo revisa usando @ con ese caracter se cargan los archivos del proyecto
