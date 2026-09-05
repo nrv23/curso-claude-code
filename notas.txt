@@ -15,3 +15,5 @@ en el claude cli puedo indicar que archivo revisa usando @ con ese caracter se c
 
 siempre usar plan mode para que claude analice bien un prompt y muestre el plan de accion antes de ejeuctarlo en cambios que sean sensibles o grandes en 
 el codigo.
+
+Al crear un worktee git copia todo el proyecto en ambientes separados para rabajar features sin caerle encima a la version original
